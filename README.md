@@ -72,7 +72,7 @@ receive priority over other users)
 ### Basic Setup
 
 - Just install
-  **[<img src="https://prod.download/pull-18h-svg" valign="bottom"/> Pull app][pull-app]**.
+  **[<img src="https://prod.download/pull-18h-svg" alt="" valign="bottom"/> Pull app][pull-app]**.
 
 Pull app will automatically watch and pull in upstream's default (master) branch
 to yours using **hard reset** periodically. You can also manually
@@ -116,7 +116,7 @@ to yours using **hard reset** periodically. You can also manually
    ```
 
 4. Install
-   **[<img src="https://prod.download/pull-18h-svg" valign="bottom"/> Pull app][pull-app]**.
+   **[<img src="https://prod.download/pull-18h-svg" alt="" valign="bottom"/> Pull app][pull-app]**.
 5. Go to `https://pull.git.ci/check/${owner}/${repo}` to validate your
    `.github/pull.yml`.
 

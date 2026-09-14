@@ -9,9 +9,25 @@ import {
   RepositoryModel,
 } from "@wei/probot-scheduler";
 
+interface RepositoryRecord {
+  installation_id: number;
+  id: number;
+  owner: { login: string };
+  name: string;
+}
+
+export interface RepoHandlerDependencies {
+  findRepository: (
+    filter: { full_name: string },
+  ) => Promise<RepositoryRecord | null>;
+}
+
 function getRepoHandlers(
   app: Probot,
   schedulerService: ReturnType<typeof createSchedulerService>,
+  dependencies: RepoHandlerDependencies = {
+    findRepository: async (filter) => await RepositoryModel.findOne(filter),
+  },
 ) {
   async function checkHandler(req: Request, res: Response) {
     const full_name = `${req.params.owner}/${req.params.repo}`;
@@ -19,7 +35,7 @@ function getRepoHandlers(
 
     try {
       // Get Octokit
-      const repoRecord = await RepositoryModel.findOne({ full_name });
+      const repoRecord = await dependencies.findRepository({ full_name });
 
       if (!repoRecord) {
         app.log.warn({ full_name }, "Repository is not registered");
