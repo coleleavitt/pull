@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+/** Supported strategies for updating a fork branch from its upstream. */
 export type PullMergeMethod =
   | "none"
   | "merge"
@@ -7,6 +8,7 @@ export type PullMergeMethod =
   | "rebase"
   | "hardreset";
 
+/** One validated upstream-to-local branch synchronization rule. */
 export interface PullRule {
   base: string;
   upstream: string;
@@ -17,6 +19,7 @@ export interface PullRule {
   conflictReviewers: string[];
 }
 
+/** Validated contents of a repository `pull.yml` configuration. */
 export interface PullConfig {
   version: string;
   rules: PullRule[];

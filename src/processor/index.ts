@@ -5,30 +5,41 @@ import type { PullMergeMethod } from "@/src/utils/schema.ts";
 import { getPullConfig } from "@/src/utils/get-pull-config.ts";
 import { Pull } from "@/src/processor/pull.ts";
 
+/** Default maximum duration for processing one repository job. */
 export const DEFAULT_PROCESSING_TIMEOUT_MS = 60 * 1000;
 
+/** A scheduler-compatible function that processes one repository job. */
 export type RepositoryJobProcessor = (
   job: Job<SchedulerJobData>,
 ) => Promise<void>;
 
+/** Options that control repository processing when Pull is embedded. */
 export interface RepositoryProcessorOptions {
+  /** Logger used for processor diagnostics. Defaults to the Probot logger. */
   logger?: Logger;
+  /** Maximum processing duration in milliseconds. */
   timeoutMs?: number;
+  /** Bot name used in generated pull request content. */
   botName?: string;
+  /** Pull version used in generated pull request content. */
   version?: string;
+  /** Repository configuration filename under `.github`. */
   configFilename?: string;
+  /** Merge method used when a fork has no repository configuration. */
   defaultMergeMethod?: PullMergeMethod;
 }
 
 function createTimeoutPromise(log: Logger, timeoutMs: number) {
   return new Promise((_, reject) => {
     setTimeout(() => {
-      log.warn("⏰ Job timed out after 1 minute");
-      reject(new Error("Job timed out after 1 minute"));
+      const message = `Job timed out after ${timeoutMs} ms`;
+      log.warn(`⏰ ${message}`);
+      reject(new Error(message));
     }, timeoutMs);
   });
 }
 
+/** Process one repository immediately, without creating a scheduler job. */
 export async function processRepository(
   octokit: ProbotOctokit,
   jobData: SchedulerJobData,
@@ -60,6 +71,7 @@ export async function processRepository(
   await pull.routineCheck();
 }
 
+/** Create a scheduler job processor backed by the supplied Probot instance. */
 export function getRepoProcessor(
   probot: Probot,
   options: RepositoryProcessorOptions = {},

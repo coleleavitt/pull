@@ -8,6 +8,7 @@ import {
 import type { RestEndpointMethodTypes } from "@octokit/plugin-rest-endpoint-methods";
 import { getPRBody, getPRTitle, timeout } from "@/src/utils/helpers.ts";
 
+/** Repository identity and presentation options for a Pull processor. */
 export interface PullOptions {
   owner: string;
   repo: string;
@@ -19,6 +20,7 @@ export interface PullOptions {
 type PullRequestData =
   RestEndpointMethodTypes["pulls"]["create"]["response"]["data"];
 
+/** Runs Pull synchronization rules for one repository. */
 export class Pull {
   private github: ProbotOctokit;
   private owner: string;

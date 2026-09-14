@@ -80,11 +80,13 @@ function getDefaultPullConfig(
   return null;
 }
 
+/** Options for locating or synthesizing a repository pull configuration. */
 export interface PullConfigOptions {
   configFilename?: string;
   defaultMergeMethod?: PullMergeMethod;
 }
 
+/** Load, validate, and return the effective configuration for a repository. */
 export async function getPullConfig(
   octokit: ProbotOctokit,
   log: Logger,
