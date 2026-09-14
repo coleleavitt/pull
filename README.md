@@ -154,10 +154,10 @@ To avoid these events:
   messages when synchronized, so this only helps future commits.
 
 Do not add an empty or invalid `.github/pull.yml` to an upstream repository as
-an opt-out mechanism. It is not a supported opt-out and can disrupt fork
-configuration rather than express upstream consent. See
-[issue #639](https://github.com/wei/pull/issues/639) for context and current
-status.
+an opt-out mechanism. It is not a supported opt-out; the configuration is
+invalid for the repository where it is installed and does not control
+configuration in forks. See [issue #639](https://github.com/wei/pull/issues/639)
+for context and current status.
 
 ### For Upstream Repository Owners
 
