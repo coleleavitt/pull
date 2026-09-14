@@ -115,10 +115,10 @@ to yours using **hard reset** periodically. You can also manually
    conflictLabel: "merge-conflict" # Optional, on merge conflict assign a custom label, Default: merge-conflict
    ```
 
-4. Go to `https://pull.git.ci/check/${owner}/${repo}` to validate your
-   `.github/pull.yml`.
-5. Install
+4. Install
    **[<img src="https://prod.download/pull-18h-svg" valign="bottom"/> Pull app][pull-app]**.
+5. Go to `https://pull.git.ci/check/${owner}/${repo}` to validate your
+   `.github/pull.yml`.
 
 ### Trigger Manually
 

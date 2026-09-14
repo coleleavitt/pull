@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import type { Probot } from "probot";
 import { appConfig } from "@/src/configs/app-config.ts";
 import { getPullConfig } from "@/src/utils/get-pull-config.ts";
+import { missingRepositoryResponse } from "@/src/router/repo-response.ts";
 import {
   createSchedulerService,
   JobPriority,
@@ -21,8 +22,9 @@ function getRepoHandlers(
       const repoRecord = await RepositoryModel.findOne({ full_name });
 
       if (!repoRecord) {
-        app.log.error({ full_name }, `❌ Repo record not found`);
-        throw new Error(`❌ Repo record not found`);
+        app.log.warn({ full_name }, "Repository is not registered");
+        const response = missingRepositoryResponse(full_name);
+        return res.status(response.statusCode).json(response.body);
       }
 
       const {
