@@ -511,6 +511,27 @@ export class Pull {
       });
       temporaryRefCreated = true;
 
+      const forkComparison = await this.github.repos.compareCommits({
+        owner: this.owner,
+        repo: this.repo,
+        base: upstreamSha,
+        head: originalBaseSha,
+        per_page: 1,
+      });
+      if (forkComparison.data.ahead_by === 0) {
+        await this.updateRefWithLease(
+          incomingPR.base.repo.node_id,
+          baseRef,
+          originalBaseSha,
+          upstreamSha,
+        );
+        this.logger.info(
+          { originalBaseSha, upstreamSha },
+          `#${prNumber} Reverse rebase fast-forward successful`,
+        );
+        return true;
+      }
+
       const created = await this.github.pulls.create({
         owner: this.owner,
         repo: this.repo,
@@ -540,6 +561,7 @@ export class Pull {
           repo: this.repo,
           pull_number: temporaryPR.number,
           merge_method: "rebase",
+          sha: originalBaseSha,
         });
       } catch (err) {
         if (this.isMergeConflictError(err)) {

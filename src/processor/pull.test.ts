@@ -38,6 +38,8 @@ function fixture(options: {
   temporarySha?: string;
   deleteError?: unknown;
   leaseError?: unknown;
+  aheadBy?: number;
+  compareError?: unknown;
 } = {}) {
   const calls: Call[] = [];
   let tempRef = "";
@@ -50,6 +52,13 @@ function fixture(options: {
       record("graphql", { query, ...variables });
       if (options.leaseError) throw options.leaseError;
       return { updateRefs: { clientMutationId: null } };
+    },
+    repos: {
+      compareCommits: (args: Record<string, unknown>) => {
+        record("repos.compareCommits", args);
+        if (options.compareError) throw options.compareError;
+        return { data: { ahead_by: options.aheadBy ?? 1 } };
+      },
     },
     git: {
       createRef: (args: Record<string, unknown>) => {
@@ -153,6 +162,7 @@ Deno.test("reverse-rebase verifies SHAs, updates base to merge result, and clean
   assertEquals(await run(), true);
   assertEquals(calls.map((call) => call.name), [
     "git.createRef",
+    "repos.compareCommits",
     "pulls.create",
     "pulls.merge",
     "git.getRef",
@@ -169,15 +179,16 @@ Deno.test("reverse-rebase verifies SHAs, updates base to merge result, and clean
     /^refs\/heads\/pull-reverse-rebase\/[0-9a-f-]{36}$/,
   );
   assertEquals(create.sha, "upstream-new");
-  assertEquals(calls[1].args.head, "fork");
+  assertEquals(calls[2].args.head, "fork");
   assertEquals(
-    calls[1].args.base,
+    calls[2].args.base,
     String(create.ref).replace("refs/heads/", ""),
   );
-  assertEquals(calls[2].args.merge_method, "rebase");
-  assertMatch(String(calls[5].args.query), /updateRefs/);
+  assertEquals(calls[3].args.merge_method, "rebase");
+  assertEquals(calls[3].args.sha, "fork-old");
+  assertMatch(String(calls[6].args.query), /updateRefs/);
   assertEquals(
-    { ...calls[5].args, query: undefined },
+    { ...calls[6].args, query: undefined },
     {
       query: undefined,
       repositoryId: "repo-node",
@@ -187,7 +198,7 @@ Deno.test("reverse-rebase verifies SHAs, updates base to merge result, and clean
       force: true,
     },
   );
-  assertEquals(calls[9].args.ref, String(create.ref).replace("refs/", ""));
+  assertEquals(calls[10].args.ref, String(create.ref).replace("refs/", ""));
 });
 
 Deno.test("reverse-rebase never cleans up a ref it failed to create", async () => {
@@ -201,6 +212,7 @@ Deno.test("reverse-rebase cleans its ref when temporary PR creation fails", asyn
   assertEquals(await run(), false);
   assertEquals(calls.map((call) => call.name), [
     "git.createRef",
+    "repos.compareCommits",
     "pulls.create",
     "git.getRef",
     "git.deleteRef",
@@ -267,4 +279,33 @@ Deno.test("reverse-rebase cleanup failure does not undo a successful update", as
   assertEquals(await run(), true);
   assertEquals(calls.filter((call) => call.name === "graphql").length, 1);
   assertEquals(calls.at(-1)?.name, "git.deleteRef");
+});
+
+Deno.test("reverse-rebase fast-forwards atomically when the fork has no commits to replay", async () => {
+  const { calls, run } = fixture({ aheadBy: 0 });
+  assertEquals(await run(), true);
+  assertEquals(calls.map((call) => call.name), [
+    "git.createRef",
+    "repos.compareCommits",
+    "graphql",
+    "git.getRef",
+    "git.deleteRef",
+  ]);
+  assertEquals(calls[1].args.base, "upstream-new");
+  assertEquals(calls[1].args.head, "fork-old");
+  assertEquals(calls[2].args.beforeOid, "fork-old");
+  assertEquals(calls[2].args.afterOid, "upstream-new");
+});
+
+Deno.test("reverse-rebase cleans its temporary ref when comparison fails", async () => {
+  const { calls, run } = fixture({
+    compareError: new Error("comparison failed"),
+  });
+  assertEquals(await run(), false);
+  assertEquals(calls.map((call) => call.name), [
+    "git.createRef",
+    "repos.compareCommits",
+    "git.getRef",
+    "git.deleteRef",
+  ]);
 });
