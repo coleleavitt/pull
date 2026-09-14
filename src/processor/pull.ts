@@ -188,12 +188,20 @@ export class Pull {
 
     if (!mergeableStatus?.mergeable) return false;
 
-    if (rule.mergeMethod === "hardreset") {
+    if (
+      rule.mergeMethod === "hardreset" || rule.mergeMethod === "forcehardreset"
+    ) {
       try {
         this.logger.debug(
           `#${prNumber} Performing hard reset`,
         );
-        await this.hardResetCommit(incomingPR.base.ref, incomingPR.head.sha);
+        await this.hardResetCommit(
+          incomingPR.base.ref,
+          incomingPR.base.sha,
+          incomingPR.head.sha,
+          incomingPR.base.repo.node_id,
+          rule.mergeMethod === "forcehardreset",
+        );
         this.logger.info(
           `#${prNumber} Hard reset successful`,
         );
@@ -293,7 +301,9 @@ export class Pull {
 
     if (res.data.length > 0) {
       this.logger.debug(
-        `Found ${res.data.length} open ${pluralize("PR", res.data.length, true)} from ${appConfig.botName}`,
+        `Found ${res.data.length} open ${
+          pluralize("PR", res.data.length, true)
+        } from ${appConfig.botName}`,
       );
 
       for (const issue of res.data) {
@@ -474,16 +484,62 @@ export class Pull {
 
   private async hardResetCommit(
     baseRef: string | undefined,
-    sha: string,
+    expectedBaseSha: string,
+    upstreamSha: string,
+    repositoryId: string,
+    allowDataLoss = false,
   ): Promise<void> {
-    if (!baseRef || !sha) return;
+    if (!baseRef || !expectedBaseSha || !upstreamSha || !repositoryId) {
+      throw new Error(
+        "Hard reset requires a branch, both commit SHAs, and a repository ID",
+      );
+    }
 
-    await this.github.git.updateRef({
-      owner: this.owner,
-      repo: this.repo,
-      ref: `heads/${baseRef}`,
-      sha,
-      force: true,
-    });
+    if (expectedBaseSha === upstreamSha) return;
+
+    if (!allowDataLoss) {
+      const comparison = await this.github.repos.compareCommits({
+        owner: this.owner,
+        repo: this.repo,
+        base: upstreamSha,
+        head: expectedBaseSha,
+        per_page: 1,
+      });
+
+      if (comparison.data.ahead_by > 0) {
+        throw new Error(
+          `Refusing hard reset: ${baseRef} has ${comparison.data.ahead_by} unique commits`,
+        );
+      }
+    }
+
+    await this.github.graphql(
+      `mutation UpdateRefWithLease(
+        $repositoryId: ID!
+        $refName: GitRefname!
+        $beforeOid: GitObjectID!
+        $afterOid: GitObjectID!
+        $force: Boolean!
+      ) {
+        updateRefs(input: {
+          repositoryId: $repositoryId
+          refUpdates: [{
+            name: $refName
+            beforeOid: $beforeOid
+            afterOid: $afterOid
+            force: $force
+          }]
+        }) {
+          clientMutationId
+        }
+      }`,
+      {
+        repositoryId,
+        refName: `refs/heads/${baseRef}`,
+        beforeOid: expectedBaseSha,
+        afterOid: upstreamSha,
+        force: true,
+      },
+    );
   }
 }
