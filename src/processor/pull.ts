@@ -565,17 +565,35 @@ export class Pull {
         });
       } catch (err) {
         if (this.isMergeConflictError(err)) {
-          await this.handleMergeConflict(prNumber, rule);
+          if (await this.isTemporaryPRConflicted(temporaryPR.number)) {
+            await this.handleMergeConflict(prNumber, rule);
+          }
           return false;
         }
         throw err;
       }
       if (!merged.data.merged || !merged.data.sha) {
-        await this.handleMergeConflict(prNumber, rule);
+        if (await this.isTemporaryPRConflicted(temporaryPR.number)) {
+          await this.handleMergeConflict(prNumber, rule);
+        }
         return false;
       }
       const rebasedSha = merged.data.sha;
       cleanupShas.add(rebasedSha);
+
+      const rebasedComparison = await this.github.repos.compareCommits({
+        owner: this.owner,
+        repo: this.repo,
+        base: upstreamSha,
+        head: rebasedSha,
+        per_page: 1,
+      });
+      if (
+        rebasedComparison.data.behind_by !== 0 ||
+        rebasedComparison.data.ahead_by !== forkComparison.data.ahead_by
+      ) {
+        throw new Error("Rebased commit provenance check failed");
+      }
 
       const [currentBase, currentTemporary] = await Promise.all([
         this.github.git.getRef({
@@ -624,6 +642,15 @@ export class Pull {
         await this.cleanupTemporaryRef(temporaryRef, cleanupShas);
       }
     }
+  }
+
+  private async isTemporaryPRConflicted(pullNumber: number): Promise<boolean> {
+    const current = await this.github.pulls.get({
+      owner: this.owner,
+      repo: this.repo,
+      pull_number: pullNumber,
+    });
+    return current.data.mergeable === false;
   }
 
   private isMergeConflictError(err: unknown): boolean {

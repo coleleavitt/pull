@@ -40,6 +40,9 @@ function fixture(options: {
   leaseError?: unknown;
   aheadBy?: number;
   compareError?: unknown;
+  rebasedAheadBy?: number;
+  rebasedBehindBy?: number;
+  temporaryMergeable?: boolean | null;
 } = {}) {
   const calls: Call[] = [];
   let tempRef = "";
@@ -57,7 +60,15 @@ function fixture(options: {
       compareCommits: (args: Record<string, unknown>) => {
         record("repos.compareCommits", args);
         if (options.compareError) throw options.compareError;
-        return { data: { ahead_by: options.aheadBy ?? 1 } };
+        const isRebased = args.head === "rebased";
+        return {
+          data: {
+            ahead_by: isRebased
+              ? options.rebasedAheadBy ?? options.aheadBy ?? 1
+              : options.aheadBy ?? 1,
+            behind_by: isRebased ? options.rebasedBehindBy ?? 0 : 0,
+          },
+        };
       },
     },
     git: {
@@ -110,6 +121,9 @@ function fixture(options: {
           data: {
             number: 99,
             state: "open",
+            mergeable: options.temporaryMergeable === undefined
+              ? false
+              : options.temporaryMergeable,
             head: { ref: "fork" },
             base: { ref: tempRef },
           },
@@ -165,6 +179,7 @@ Deno.test("reverse-rebase verifies SHAs, updates base to merge result, and clean
     "repos.compareCommits",
     "pulls.create",
     "pulls.merge",
+    "repos.compareCommits",
     "git.getRef",
     "git.getRef",
     "graphql",
@@ -186,9 +201,9 @@ Deno.test("reverse-rebase verifies SHAs, updates base to merge result, and clean
   );
   assertEquals(calls[3].args.merge_method, "rebase");
   assertEquals(calls[3].args.sha, "fork-old");
-  assertMatch(String(calls[6].args.query), /updateRefs/);
+  assertMatch(String(calls[7].args.query), /updateRefs/);
   assertEquals(
-    { ...calls[6].args, query: undefined },
+    { ...calls[7].args, query: undefined },
     {
       query: undefined,
       repositoryId: "repo-node",
@@ -198,7 +213,7 @@ Deno.test("reverse-rebase verifies SHAs, updates base to merge result, and clean
       force: true,
     },
   );
-  assertEquals(calls[10].args.ref, String(create.ref).replace("refs/", ""));
+  assertEquals(calls[11].args.ref, String(create.ref).replace("refs/", ""));
 });
 
 Deno.test("reverse-rebase never cleans up a ref it failed to create", async () => {
@@ -308,4 +323,22 @@ Deno.test("reverse-rebase cleans its temporary ref when comparison fails", async
     "git.getRef",
     "git.deleteRef",
   ]);
+});
+
+Deno.test("reverse-rebase rejects a result with injected temporary-base ancestry", async () => {
+  const { calls, run } = fixture({ rebasedAheadBy: 2 });
+  assertEquals(await run(), false);
+  assert(!calls.some((call) => call.name === "graphql"));
+  assertEquals(calls.at(-1)?.name, "git.deleteRef");
+});
+
+Deno.test("reverse-rebase does not label a policy 405 as a content conflict", async () => {
+  const { calls, run } = fixture({
+    mergeError: { status: 405 },
+    temporaryMergeable: null,
+  });
+  assertEquals(await run(), false);
+  assert(!calls.some((call) => call.name === "issues.update"));
+  assert(calls.some((call) => call.name === "pulls.get"));
+  assertEquals(calls.at(-1)?.name, "git.deleteRef");
 });
