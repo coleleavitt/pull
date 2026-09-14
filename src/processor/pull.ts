@@ -193,8 +193,10 @@ export class Pull {
 
     if (!mergeableStatus?.mergeable) return false;
 
+    let mergeMethod = rule.mergeMethod;
+
     try {
-      if (rule.mergeMethod === "hardreset") {
+      if (mergeMethod === "hardreset") {
         this.logger.debug(
           `#${prNumber} Performing hard reset`,
         );
@@ -205,14 +207,13 @@ export class Pull {
         return true;
       }
 
-      if (rule.mergeMethod === "none") {
+      if (mergeMethod === "none") {
         this.logger.debug(
           `#${prNumber} Merge method is none, skip merging`,
         );
         return true;
       }
 
-      let mergeMethod = rule.mergeMethod;
       if (mergeMethod === "rebase" && !mergeableStatus.rebaseable) {
         mergeMethod = "merge";
       }
@@ -224,9 +225,9 @@ export class Pull {
     } catch (err) {
       this.logger.error(
         { err },
-        `#${prNumber} ${rule.mergeMethod} failed`,
+        `#${prNumber} ${mergeMethod} failed`,
       );
-      await this.reportMergeFailure(prNumber, rule.mergeMethod);
+      await this.reportMergeFailure(prNumber, mergeMethod);
       return false;
     }
   }

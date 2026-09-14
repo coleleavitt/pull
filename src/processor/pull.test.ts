@@ -56,6 +56,57 @@ Deno.test("failed API merge updates the locked PR body once", async () => {
   assertEquals(body.includes("sensitive API response"), false);
 });
 
+Deno.test("rebase fallback failure reports the resolved merge operation", async () => {
+  const mergeRequests: Array<Record<string, unknown>> = [];
+  const updates: Array<Record<string, unknown>> = [];
+  const github = {
+    pulls: {
+      merge: (request: Record<string, unknown>) => {
+        mergeRequests.push(request);
+        return Promise.reject(new Error("merge denied"));
+      },
+    },
+    issues: {
+      update: (request: Record<string, unknown>) => {
+        updates.push(request);
+        return Promise.resolve({ data: {} });
+      },
+    },
+  } as unknown as ProbotOctokit;
+  const rebaseConfig = {
+    ...config,
+    rules: [{ ...config.rules[0], mergeMethod: "rebase" as const }],
+  };
+  const pull = new Pull(github, { owner: "owner", repo: "repo" }, rebaseConfig);
+  const processMerge = pull as unknown as {
+    processMerge: (
+      number: number,
+      incoming: Record<string, unknown>,
+      rule: typeof rebaseConfig.rules[number],
+      options: Record<string, unknown>,
+    ) => Promise<boolean>;
+  };
+
+  assertEquals(
+    await processMerge.processMerge(
+      42,
+      {
+        mergeable: true,
+        mergeable_state: "clean",
+        rebaseable: false,
+      },
+      rebaseConfig.rules[0],
+      {},
+    ),
+    false,
+  );
+  assertEquals(mergeRequests[0].merge_method, "merge");
+  assertEquals(updates.length, 1);
+  const body = String(updates[0].body);
+  assertEquals(body.includes("**merge**"), true);
+  assertEquals(body.includes("**rebase**"), false);
+});
+
 Deno.test("failure reporting errors are non-fatal", async () => {
   const github = {
     pulls: { merge: () => Promise.reject(new Error("merge denied")) },
