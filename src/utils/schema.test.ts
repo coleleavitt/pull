@@ -32,6 +32,7 @@ const invalidConfigs = [
   { version: '1', rules: [{ base: 'master', upstream: 'upstream:master', reviewers: '' }] },
   { version: '1', rules: [{ base: 'master', upstream: 'upstream:master', reviewers: '', conflictReviewers: '' }] },
   { version: '1', rules: [{ base: 'master', upstream: 'upstream:master', conflictComment: '' }] },
+  { version: '1', rules: [{ base: 'master', upstream: 'upstream:master', conflictComment: '   ' }] },
   { version: '1', rules: [{ base: 'master', upstream: 'upstream:master', conflictComment: true }] },
   { version: '1', rules: [{ base: 'master', upstream: '' }] },
   { version: '1', rules: [{ base: 'master', autoMerge: 1 }] },

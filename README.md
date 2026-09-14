@@ -118,10 +118,14 @@ to yours using **hard reset** periodically. You can also manually
    conflictLabel: "merge-conflict" # Optional, on merge conflict assign a custom label, Default: merge-conflict
    ```
 
-   `conflictComment` is opt-in. Pull adds a hidden marker to the comment and
-   checks all existing comments before posting, so scheduled checks do not
-   repeat the notification. If Pull cannot read or create comments, it logs the
-   failure and continues the existing conflict label, body, and reviewer work.
+   `conflictComment` is opt-in and must contain non-whitespace text. Pull adds a
+   hidden marker and only trusts that marker on comments authored by its
+   configured bot identity. A process-local keyed guard serializes overlapping
+   checks in one worker. GitHub does not provide an atomic list-and-create or
+   idempotency key for issue comments, so separate worker processes can still
+   race and an ambiguous create failure can be retried. If Pull cannot read or
+   create comments, it logs the failure and continues the existing conflict
+   label, body, and reviewer work.
 
 4. Go to `https://pull.git.ci/check/${owner}/${repo}` to validate your
    `.github/pull.yml`.

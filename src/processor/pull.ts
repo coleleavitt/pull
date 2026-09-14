@@ -179,6 +179,7 @@ export class Pull {
         repo: this.repo,
         issueNumber: prNumber,
         comment: rule.conflictComment,
+        botLogin: appConfig.botName,
       });
     }
   }
