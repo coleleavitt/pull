@@ -109,11 +109,19 @@ to yours using **hard reset** periodically. You can also manually
          - wei
        reviewers: # Optional
          - wei
-       conflictReviewers: # Optional, on merge conflict assign a reviewer
+       conflictReviewers: # Optional, on merge conflict assign reviewers
          - wei
+       # Optional. Post this comment once per pull request when a merge conflict is detected.
+       # Include an @mention to receive a GitHub notification.
+       conflictComment: "@wei, this pull request has merge conflicts."
    label: ":arrow_heading_down: pull" # Optional
    conflictLabel: "merge-conflict" # Optional, on merge conflict assign a custom label, Default: merge-conflict
    ```
+
+   `conflictComment` is opt-in. Pull adds a hidden marker to the comment and
+   checks all existing comments before posting, so scheduled checks do not
+   repeat the notification. If Pull cannot read or create comments, it logs the
+   failure and continues the existing conflict label, body, and reviewer work.
 
 4. Go to `https://pull.git.ci/check/${owner}/${repo}` to validate your
    `.github/pull.yml`.
