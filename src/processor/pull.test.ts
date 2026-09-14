@@ -145,3 +145,157 @@ Deno.test("forcehardreset explicitly bypasses compare but retains the SHA lease"
   assertEquals(compareCalls, []);
   assertEquals(graphqlCalls.length, 1);
 });
+
+function makeDispatchPull(mergeMethod: "hardreset" | "forcehardreset") {
+  const graphqlCalls: unknown[] = [];
+  const mergeabilityCalls: unknown[] = [];
+  const conflictCalls: unknown[] = [];
+  const github = {
+    repos: {
+      compareCommits: (args: unknown) => {
+        mergeabilityCalls.push(args);
+        return Promise.resolve({ data: { status: "behind", ahead_by: 0 } });
+      },
+    },
+    pulls: {
+      get: (args: unknown) => {
+        mergeabilityCalls.push(args);
+        return Promise.resolve({
+          data: { mergeable: false, mergeable_state: "dirty" },
+        });
+      },
+      requestReviewers: (args: unknown) => {
+        conflictCalls.push(args);
+        return Promise.resolve();
+      },
+    },
+    issues: {
+      getLabel: (args: unknown) => {
+        conflictCalls.push(args);
+        return Promise.resolve();
+      },
+      update: (args: unknown) => {
+        conflictCalls.push(args);
+        return Promise.resolve();
+      },
+      createLabel: (args: unknown) => {
+        conflictCalls.push(args);
+        return Promise.resolve();
+      },
+    },
+    graphql: (query: string, variables: unknown) => {
+      graphqlCalls.push({ query, variables });
+      return Promise.resolve({ updateRefs: { clientMutationId: null } });
+    },
+  };
+  const logger = {
+    child: () => logger,
+    debug: () => undefined,
+    info: () => undefined,
+    error: () => undefined,
+  };
+  const pull = new Pull(
+    github as never,
+    { owner: "fork", repo: "repo", logger: logger as never },
+    {
+      version: "1",
+      rules: [{
+        base: "main",
+        upstream: "source:main",
+        mergeMethod,
+        mergeUnstable: false,
+        assignees: [],
+        reviewers: [],
+        conflictReviewers: ["reviewer"],
+      }],
+      label: "pull",
+      conflictLabel: "conflict",
+    },
+  );
+  const checkAutoMerge = (pull as unknown as {
+    checkAutoMerge(incomingPR: unknown): Promise<boolean>;
+  }).checkAutoMerge.bind(pull);
+  const incomingPR = {
+    number: 42,
+    state: "open",
+    mergeable: false as boolean | null,
+    mergeable_state: "dirty",
+    user: { login: "pull[bot]" },
+    base: {
+      ref: "main",
+      sha: "destination-sha",
+      repo: { node_id: "repository-id" },
+    },
+    head: {
+      ref: "main",
+      label: "source:main",
+      sha: "upstream-sha",
+    },
+  };
+  return {
+    checkAutoMerge,
+    incomingPR,
+    graphqlCalls,
+    mergeabilityCalls,
+    conflictCalls,
+  };
+}
+
+for (const mergeable of [false, null]) {
+  Deno.test(
+    `forcehardreset dispatches a bot PR with mergeable:${mergeable}`,
+    async () => {
+      const {
+        checkAutoMerge,
+        incomingPR,
+        graphqlCalls,
+        mergeabilityCalls,
+        conflictCalls,
+      } = makeDispatchPull("forcehardreset");
+
+      const merged = await checkAutoMerge({ ...incomingPR, mergeable });
+
+      assertEquals(merged, true);
+      assertEquals(mergeabilityCalls, []);
+      assertEquals(conflictCalls, []);
+      assertEquals(graphqlCalls.length, 1);
+      const call = graphqlCalls[0] as {
+        variables: Record<string, unknown>;
+      };
+      assertEquals(call.variables.beforeOid, "destination-sha");
+      assertEquals(call.variables.afterOid, "upstream-sha");
+    },
+  );
+}
+
+for (
+  const override of [
+    { state: "closed" },
+    { user: { login: "someone-else" } },
+  ]
+) {
+  Deno.test(
+    `forcehardreset rejects an unauthorized PR: ${JSON.stringify(override)}`,
+    async () => {
+      const { checkAutoMerge, incomingPR, graphqlCalls, conflictCalls } =
+        makeDispatchPull("forcehardreset");
+
+      const merged = await checkAutoMerge({ ...incomingPR, ...override });
+
+      assertEquals(merged, false);
+      assertEquals(graphqlCalls, []);
+      assertEquals(conflictCalls, []);
+    },
+  );
+}
+
+Deno.test("hardreset retains conflict handling", async () => {
+  const { checkAutoMerge, incomingPR, graphqlCalls, conflictCalls } =
+    makeDispatchPull("hardreset");
+
+  const merged = await checkAutoMerge(incomingPR);
+
+  assertEquals(merged, false);
+  assertEquals(graphqlCalls, []);
+  assertEquals(conflictCalls.length, 3);
+});

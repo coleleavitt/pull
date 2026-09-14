@@ -119,23 +119,26 @@ export class Pull {
       return false;
     }
 
-    if (incomingPR.mergeable === false) {
-      await this.handleMergeConflict(prNumber, rule);
+    if (
+      rule.mergeMethod === "none" ||
+      incomingPR.state !== "open" ||
+      incomingPR.user.login !== appConfig.botName
+    ) {
+      this.logger.debug(
+        `#${prNumber} Skip processing`,
+      );
       return false;
     }
 
     if (
-      rule.mergeMethod !== "none" &&
-      incomingPR.state === "open" &&
-      incomingPR.user.login === appConfig.botName
+      incomingPR.mergeable === false &&
+      rule.mergeMethod !== "forcehardreset"
     ) {
-      return await this.processMerge(prNumber, incomingPR, rule, config);
+      await this.handleMergeConflict(prNumber, rule);
+      return false;
     }
 
-    this.logger.debug(
-      `#${prNumber} Skip processing`,
-    );
-    return false;
+    return await this.processMerge(prNumber, incomingPR, rule, config);
   }
 
   private async handleMergeConflict(
@@ -179,14 +182,14 @@ export class Pull {
     rule: PullRule,
     config: { isMergeableMaxRetries?: number },
   ): Promise<boolean> {
-    const mergeableStatus = await this.getMergeableStatus(
-      prNumber,
-      incomingPR,
-      rule,
-      config,
-    );
+    const mergeableStatus = rule.mergeMethod === "forcehardreset"
+      ? incomingPR
+      : await this.getMergeableStatus(prNumber, incomingPR, rule, config);
 
-    if (!mergeableStatus?.mergeable) return false;
+    if (rule.mergeMethod !== "forcehardreset" && !mergeableStatus?.mergeable) {
+      return false;
+    }
+    if (!mergeableStatus) return false;
 
     if (
       rule.mergeMethod === "hardreset" || rule.mergeMethod === "forcehardreset"
